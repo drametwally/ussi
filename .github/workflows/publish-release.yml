@@ -4,14 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Version to release (must match VERSION_NAME in gradle.properties if empty)'
+        description: 'Release version (default: VERSION_NAME from gradle.properties, without -SNAPSHOT)'
         required: false
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
-
-permissions:
-  contents: read
 
 concurrency:
   group: maven-central-release
@@ -21,13 +18,15 @@ jobs:
   release:
     if: github.repository == 'uber/ussi'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out USSI sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4.2.2
         with:
-          persist-credentials: false
+          fetch-depth: 0
 
-      - name: Verify release tag and version
+      - name: Determine release version
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_VERSION_INPUT: ${{ github.event.inputs.release_version }}
@@ -37,6 +36,7 @@ jobs:
               release_version="$RELEASE_VERSION_INPUT"
             else
               release_version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
+              release_version="${release_version%-SNAPSHOT}"
             fi
           else
             if [[ ! "$RELEASE_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
@@ -46,11 +46,37 @@ jobs:
             release_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
           fi
           configured_version="$(sed -n 's/^VERSION_NAME=//p' gradle.properties)"
-          if [[ "$configured_version" != "$release_version" ]]; then
-            echo "VERSION_NAME ($configured_version) must match the release version ($release_version)" >&2
+          configured_base="${configured_version%-SNAPSHOT}"
+          if [[ "$configured_base" != "$release_version" ]]; then
+            echo "Release version ($release_version) must match VERSION_NAME ($configured_version)" >&2
             exit 1
           fi
           echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
+
+      - name: Extract release notes
+        run: |
+          awk -v ver="$RELEASE_VERSION" '
+            /^## / { if (found) exit; if (index($0, "## [" ver "]") == 1) { found=1; next } }
+            found
+          ' CHANGELOG.md > release_notes.md
+          if [[ ! -s release_notes.md ]]; then
+            echo "Add a ## [$RELEASE_VERSION] section to CHANGELOG.md" >&2
+            exit 1
+          fi
+
+      - name: Prepare release version on main
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          sed -i -E "s/^VERSION_NAME=.*/VERSION_NAME=${RELEASE_VERSION}/" gradle.properties
+          sed -i -E "s/maven_coordinates = \"com.uber.ussi:ussi:[^\"]+\"/maven_coordinates = \"com.uber.ussi:ussi:${RELEASE_VERSION}\"/" BUILD.bazel
+          if git diff --quiet; then
+            echo "VERSION_NAME and BUILD.bazel already at release version ${RELEASE_VERSION}"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore: release ${RELEASE_VERSION} [skip ci]"
+          git push origin HEAD:main
 
       - name: Set up JDK
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v4.7.0
@@ -75,3 +101,11 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.PGP_SIGNING_KEY_PRIVATE_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.PGP_SIGNING_KEY_PASSWORD }}
         run: ./gradlew publishAndReleaseToMavenCentral --no-daemon
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v2.3.3
+        with:
+          tag_name: v${{ env.RELEASE_VERSION }}
+          name: ${{ env.RELEASE_VERSION }}
+          body_path: release_notes.md
+          generate_release_notes: false
