@@ -7,7 +7,7 @@ Published artifacts use **`com.uber.ussi:ussi`**.
 ## CI and local builds
 
 - **Pull requests and main:** Bazel tests (`.github/workflows/tests.yml`).
-- **Releases:** Gradle publishes to Maven Central (`.github/workflows/publish-release.yml`).
+- **Releases:** Gradle uploads, validates, and releases to Maven Central (`.github/workflows/publish-release.yml` via `publishAndReleaseToMavenCentral`).
 
 Both build systems share the same `src/main/java` and `src/test/java` trees. Bazel remains supported for day-to-day development; Gradle is the supported release path for Uber open-source JVM libraries.
 
@@ -19,7 +19,7 @@ Gradle requires JDK 21 or later. On Uber-managed machines that inject an interna
 2. Update `maven_coordinates` in `BUILD.bazel` to the same version.
 3. Merge to `main`.
 4. Create and push an annotated tag `vX.Y.Z` matching `VERSION_NAME`.
-5. Confirm the **Publish release to Maven Central** workflow succeeds on GitHub Actions.
+5. Confirm the **Release to Maven Central** workflow succeeds (it waits until the deployment is published, not only staged).
 6. Confirm the artifact on [Maven Central](https://central.sonatype.com/artifact/com.uber.ussi/ussi).
 
 If tag `vX.Y.Z` already exists on an older commit, move the tag after the publish workflow is on `main`, or cut the next patch version instead.
