@@ -7,7 +7,7 @@ Published artifacts use **`com.uber.ussi:ussi`**.
 ## CI and local builds
 
 - **Pull requests and main:** Bazel tests (`.github/workflows/tests.yml`).
-- **Releases:** `.github/workflows/publish-release.yml` (Gradle `publishAndReleaseToMavenCentral`, GitHub Release, changelog).
+- **Releases:** `.github/workflows/release.yml` (Gradle `publishAndReleaseToMavenCentral`, GitHub Release, changelog).
 
 Both build systems share the same `src/main/java` and `src/test/java` trees. Bazel remains supported for day-to-day development; Gradle is the supported release path for Uber open-source JVM libraries.
 

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version (default: VERSION_NAME from gradle.properties, without -SNAPSHOT)'
+        description: 'Version to release (if empty, derive from VERSION_NAME in gradle.properties)'
         required: false
   push:
     tags:
@@ -66,6 +66,9 @@ jobs:
 
       - name: Prepare release version on main
         if: github.event_name == 'workflow_dispatch'
+        env:
+          GIT_USER_NAME: ${{ github.actor }}
+          GIT_USER_EMAIL: ${{ format('{0}+{1}@users.noreply.github.com', github.actor_id, github.actor) }}
         run: |
           sed -i -E "s/^VERSION_NAME=.*/VERSION_NAME=${RELEASE_VERSION}/" gradle.properties
           sed -i -E "s/maven_coordinates = \"com.uber.ussi:ussi:[^\"]+\"/maven_coordinates = \"com.uber.ussi:ussi:${RELEASE_VERSION}\"/" BUILD.bazel
@@ -73,8 +76,8 @@ jobs:
             echo "VERSION_NAME and BUILD.bazel already at release version ${RELEASE_VERSION}"
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
           git commit -am "chore: release ${RELEASE_VERSION} [skip ci]"
           git push origin HEAD:main
 
@@ -108,4 +111,5 @@ jobs:
           tag_name: v${{ env.RELEASE_VERSION }}
           name: ${{ env.RELEASE_VERSION }}
           body_path: release_notes.md
-          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
