@@ -1,8 +1,7 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Release notes for each version use a top-level `# X.Y.Z` heading (matching the
+release workflow and [RELEASING.md](RELEASING.md)).
 
 # 0.1.0
 
