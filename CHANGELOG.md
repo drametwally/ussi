@@ -4,9 +4,8 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.0] - 2026-10-16
+# 0.1.0
 
-### Added
+Initial open-source release of Uber Similarity Search Index (USSI).
 
-- Initial open-source release of Uber Similarity Search Index (USSI).
-- Gradle and Bazel build support; Maven coordinates `com.uber.ussi:ussi`.
+Published Maven coordinates: `com.uber.ussi:ussi:0.1.0`.

@@ -7,35 +7,67 @@ Published artifacts use **`com.uber.ussi:ussi`**.
 ## CI and local builds
 
 - **Pull requests and main:** Bazel tests (`.github/workflows/tests.yml`).
-- **Releases:** `.github/workflows/release.yml` (Gradle `publishAndReleaseToMavenCentral`, GitHub Release, changelog).
+- **Releases:** [Release to Maven Central](.github/workflows/release.yml) on version tags.
 
 Both build systems share the same `src/main/java` and `src/test/java` trees. Bazel remains supported for day-to-day development; Gradle is the supported release path for Uber open-source JVM libraries.
 
 Gradle requires JDK 21 or later. On Uber-managed machines that inject an internal Artifactory `init.gradle`, use a clean `GRADLE_USER_HOME` (for example `GRADLE_USER_HOME=$PWD/.gradle-home ./gradlew test`) so dependencies resolve from Maven Central only.
 
-## Version files
+## Release process
 
-Keep these in sync:
+Creating and pushing a release tag to `uber/ussi` automatically triggers the
+[Release to Maven Central workflow](.github/workflows/release.yml). Merging a PR
+or pushing a commit to `main` does not trigger a release.
 
-- `gradle.properties` — `VERSION_NAME` (use `-SNAPSHOT` on `main` between releases)
-- `BUILD.bazel` — `maven_coordinates` on `//:src_main`
-- `CHANGELOG.md` — `## [X.Y.Z]` section for each release
+The workflow signs, uploads, and releases `com.uber.ussi:ussi` to Maven Central.
+The Gradle Maven Publish plugin's `publishToMavenCentral` task handles both upload
+and release because `mavenCentralAutomaticPublishing=true` is set in
+`gradle.properties`. After publishing, the workflow creates a GitHub Release for
+the tag using the matching `CHANGELOG.md` section as its release notes. The tagged
+commit should already have passed CI on `main`.
 
-## Cut a release (recommended: workflow dispatch)
+## Prepare and publish a release
 
-1. On `main`, set `VERSION_NAME` to the next release with a `-SNAPSHOT` suffix (for example `0.2.0-SNAPSHOT`) and align `BUILD.bazel`.
-2. Add a `## [0.2.0]` section to `CHANGELOG.md`.
-3. Merge to `main`.
-4. Run **Release to Maven Central** → **Run workflow** on `main` (optional `release_version` override).
-   - CI strips `-SNAPSHOT`, commits the release version to `gradle.properties` and `BUILD.bazel`, publishes to Maven Central, and creates the GitHub Release + tag.
-5. Confirm the artifact on [Maven Central](https://central.sonatype.com/artifact/com.uber.ussi/ussi).
-6. Open a follow-up PR bumping `VERSION_NAME` and `BUILD.bazel` to the next `-SNAPSHOT` (branch protection may block the workflow from doing this automatically).
+1. Set `VERSION_NAME` in `gradle.properties` to the release version without
+   `-SNAPSHOT`, for example `0.1.0`.
+2. Set `maven_coordinates` on `//:src_main` in `BUILD.bazel` to the same version.
+3. Add a matching `# 0.1.0` section with release notes to `CHANGELOG.md`.
+4. Commit with `Prepare for release 0.1.0.` and merge the PR into `main`.
+5. Tag the release commit and push the tag:
 
-## Cut a release (tag push)
+   ```sh
+   git switch main
+   git pull --ff-only origin main
+   git tag -a v0.1.0 -m "Version 0.1.0"
+   git push origin v0.1.0
+   ```
 
-Alternatively, after `VERSION_NAME` and `BUILD.bazel` already hold the release version (no `-SNAPSHOT`):
+6. Follow **Release to Maven Central** in GitHub Actions. The workflow validates
+   the tag, version, Bazel coordinates, and changelog before publishing, then
+   creates the GitHub Release. Maven Central may take additional time to make a
+   released version available.
+7. Prepare the next development version, such as `0.2.0-SNAPSHOT`, in
+   `gradle.properties` and `BUILD.bazel`, and submit it in a separate PR.
 
-1. Push annotated tag `vX.Y.Z`.
-2. The same workflow tests, publishes, and creates the GitHub Release.
+Release tags use the form `vX.Y.Z`. The tag version (without the `v` prefix) must
+exactly match `VERSION_NAME`, and snapshot versions are rejected. The workflow
+does not change versions, create commits, or push tags.
 
-If tag `vX.Y.Z` already exists on an older commit, move the tag after fixing the release workflow, or cut the next patch version.
+## Retry a release
+
+Open the failed tag-push run of **Release to Maven Central** in GitHub Actions
+and select **Re-run failed jobs**. Versions already released to Maven Central
+cannot be overwritten; use a new version for changed artifacts.
+
+## Repository secrets
+
+These GitHub Actions secrets are configured at the Uber organization level for
+`uber/ussi`:
+
+| Secret | Purpose |
+| --- | --- |
+| `MAVEN_CENTRAL_USER_TOKEN_USERNAME` | Central Portal user token username for `com.uber.ussi`. |
+| `MAVEN_CENTRAL_USER_TOKEN_PASSWORD` | Central Portal user token password. |
+| `PGP_SIGNING_KEY_PRIVATE_KEY` | ASCII-armored private signing key. |
+| `PGP_PRIVATE_KEY_ID` | Signing subkey ID, if required. Optional. |
+| `PGP_SIGNING_KEY_PASSWORD` | Private key passphrase. Optional for an unencrypted key. |
